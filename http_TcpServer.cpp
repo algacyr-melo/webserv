@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/02/06 23:45:03 by almelo           ###   ########.fr       */
+/*   Updated: 2024/02/08 02:59:04 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 #include <arpa/inet.h>
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -23,7 +24,6 @@
 namespace
 {
 	int const BUFFER_SIZE = 4096; // 4KB
-	//int const BUFFER_SIZE = 4;
 
 	void log(std::string const& message)
 	{
@@ -64,7 +64,8 @@ namespace http
 
 	int	TcpServer::_startServer(void)
 	{
-		// create the "server" socket that's going to listen to connections
+		// create the "server" socket that's going
+		// to listen to connections
 		_socket = socket(AF_INET, SOCK_STREAM, 0);
 		if (_socket < 0)
 		{
@@ -103,29 +104,43 @@ namespace http
 		{
 			_acceptConnection(_newSocket);
 
-			char buffer[BUFFER_SIZE] = {0};
+			// set the socket to non-blocking
+			//fcntl(_newSocket, F_SETFL, O_NONBLOCK);
+
 			std::ostringstream request;
+
+			char buffer[BUFFER_SIZE] = {0};
 			while (true)
 			{
+				// the read call will block by default
+				// waiting for data to be available for reading
 				bytesReceived = read(_newSocket, buffer, BUFFER_SIZE - 1);
+
+				// is something wrong with the reading process?
+				if (bytesReceived == -1)
+				{
+					close(this->_newSocket);
+					close(this->_socket);
+					exitWithError("Failed to read bytes from client");
+				}
+
+				// did the client close the connection?
+				if (bytesReceived == 0)
+				{
+					close(this->_newSocket);
+					log("Connection closed by the client");
+					break ;
+				}
+
 				buffer[bytesReceived] = '\0';
 				request << buffer;
 
-				// break if find the end of request header or
-				// connection was closed by client or
-				// some error ocurred while reading
+				// is it the end of request headers?
 				std::size_t reqHeaderEnd = request.str().find("\r\n\r\n");
-				if (reqHeaderEnd != std::string::npos ||
-					bytesReceived <= 0)
+				if (reqHeaderEnd != std::string::npos)
 				{
 					break ;
 				}
-			}
-			if (bytesReceived == -1)
-			{
-				close(this->_socket);
-				close(this->_newSocket);
-				exitWithError("Failed to read bytes from client");
 			}
 			this->_request = request.str();
 			request.clear();
@@ -135,6 +150,19 @@ namespace http
 			//log(oss.str());
 
 			// to do: parse the request
+			//_parseRequest();
+
+			std::istringstream	issRequest(_request);
+
+			std::string requestLine;
+			std::getline(issRequest, requestLine);
+			log(requestLine);
+
+			//std::string	line;
+			//while (std::getline(issRequest, line))
+			//{
+			//	log(line);
+			//}
 
 			_sendResponse();
 			close(_newSocket);
