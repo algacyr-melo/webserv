@@ -1,25 +1,26 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   main.cpp                                           :+:      :+:    :+:   */
+/*   http_RequestData.h                                 :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2024/01/05 15:31:18 by almelo            #+#    #+#             */
-/*   Updated: 2024/02/21 18:59:08 by almelo           ###   ########.fr       */
+/*   Created: 2024/02/21 18:45:40 by almelo            #+#    #+#             */
+/*   Updated: 2024/02/21 18:56:58 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "http_TcpServer.h"
+#ifndef HTTP__REQUEST_LINE_H
+# define HTTP__REQUEST_LINE_H
 
-int main(void)
-{
-	using namespace http;
+# include <string>
 
-	int const PORT = 8080;
-
-	TcpServer server = TcpServer("0.0.0.0", PORT);
-
-	server.startListen();
-	return 0;
+namespace http {
+	struct	RequestLine
+	{
+		std::string method;
+		std::string target;
+		std::string httpVersion;
+	};
 }
+#endif

@@ -9,7 +9,7 @@ CXX			= c++
 
 CXXFLAGS	= -Wall -Wextra -Werror -std=c++98
 
-$(NAME)		: $(OBJ) http_TcpServer.hpp
+$(NAME)		: $(OBJ) http_TcpServer.h http_RequestLine.h
 	$(CXX) $(OBJ) -o $(NAME)
 
 all			: $(NAME)

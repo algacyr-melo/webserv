@@ -6,12 +6,14 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/02/08 02:59:04 by almelo           ###   ########.fr       */
+/*   Updated: 2024/02/21 20:53:53 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-#include "http_TcpServer.hpp"
+#include "http_TcpServer.h"
+#include "http_RequestLine.h"
 #include <arpa/inet.h>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -45,10 +47,9 @@ namespace http
 			_port(port),
 			_socket(),
 			_newSocket(),
-			//_incomingMessage(),
 			_socketAddr(),
 			_socketAddrLen(sizeof(_socketAddr)),
-			_serverMessage(_buildResponse())
+			_serverMessage()
 	{
 		_socketAddr.sin_family = AF_INET;
 		_socketAddr.sin_port = htons(_port);
@@ -145,24 +146,18 @@ namespace http
 			this->_request = request.str();
 			request.clear();
 
-			//std::ostringstream oss;
-			//oss << "---- Received request from client ----";
-			//log(oss.str());
-
 			// to do: parse the request
 			//_parseRequest();
-
 			std::istringstream	issRequest(_request);
 
-			std::string requestLine;
-			std::getline(issRequest, requestLine);
-			log(requestLine);
+			// method, target(URI), http-version
+			struct RequestLine requestLine;
+			issRequest >> requestLine.method;
+			issRequest >> requestLine.target;
+			issRequest >> requestLine.httpVersion;
+			issRequest.clear();
 
-			//std::string	line;
-			//while (std::getline(issRequest, line))
-			//{
-			//	log(line);
-			//}
+			_serverMessage = _buildResponse(requestLine);
 
 			_sendResponse();
 			close(_newSocket);
@@ -187,17 +182,34 @@ namespace http
 		}
 	}
 
-	std::string TcpServer::_buildResponse(void)
+	std::string TcpServer::_buildResponse(struct RequestLine& requestLine)
     {
-		std::string htmlFile = "<!DOCTYPE html><html lang=\"en\"><body><h1> HOME </h1><p> Hello from your Server :) </p></body></html>";
-		std::ostringstream oss;
-		oss << "HTTP/1.1 200 OK\r\n"
-			<< "Content-Type: text/html\r\n"
-			<< "Content-Length: " << htmlFile.size() << "\r\n"
-			<< "\r\n"
-			<< htmlFile;
+		std::ostringstream ossMessageBody;
 
-		return oss.str();
+		std::string const DEFAULT_RESOURCE = "index.html";
+		std::string const SERVER_ROOT = "/home/algacyr/Desktop/oracle-next-education/oneCrypt";
+
+		if (requestLine.target == "/") {
+			requestLine.target.append(DEFAULT_RESOURCE);
+		}
+
+		// build message body
+		std::ifstream	ifs((SERVER_ROOT + requestLine.target).c_str());
+		std::string line;
+		while (std::getline(ifs, line))
+		{
+			ossMessageBody << line << '\n';
+		}
+		ifs.close();
+
+		// build message header
+		std::ostringstream ossMessageHeader;
+		ossMessageHeader << "HTTP/1.1 200 OK\r\n"
+			<< "Content-Type: text/html\r\n"
+			<< "Content-Length: " << ossMessageBody.str().size() << "\r\n"
+			<< "\r\n";
+
+		return ossMessageHeader.str() + ossMessageBody.str();
     }
 
 	void	TcpServer::_sendResponse(void)
@@ -223,4 +235,3 @@ namespace http
 		exit(0);
 	}
 } // namespace http
-
