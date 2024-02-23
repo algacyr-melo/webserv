@@ -6,13 +6,14 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/02/21 20:53:53 by almelo           ###   ########.fr       */
+/*   Updated: 2024/02/23 20:47:52 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "http_TcpServer.h"
 #include "http_RequestLine.h"
 #include <arpa/inet.h>
+#include <cstddef>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -22,6 +23,8 @@
 #include <stdlib.h>
 
 #include <fcntl.h>
+
+#include <map>
 
 namespace
 {
@@ -187,14 +190,18 @@ namespace http
 		std::ostringstream ossMessageBody;
 
 		std::string const DEFAULT_RESOURCE = "index.html";
-		std::string const SERVER_ROOT = "/home/algacyr/Desktop/oracle-next-education/oneCrypt";
+		//std::string const SERVER_ROOT = "/home/algacyr/Desktop/oracle-next-education/oneCrypt";
+		std::string const SERVER_ROOT = "/home/algacyr/Desktop/42/projects/webserv";
 
 		if (requestLine.target == "/") {
 			requestLine.target.append(DEFAULT_RESOURCE);
 		}
 
-		// build message body
+		// to do:
+		// if there is no index.html, create directory listing for /
 		std::ifstream	ifs((SERVER_ROOT + requestLine.target).c_str());
+
+		// build message body
 		std::string line;
 		while (std::getline(ifs, line))
 		{
@@ -202,12 +209,38 @@ namespace http
 		}
 		ifs.close();
 
+		// message constant characters
+		std::string const SP = " ";
+		std::string const CRLF = "\r\n";
+
+		std::string const messageBody = ossMessageBody.str();
+		std::size_t const contentLength = messageBody.size();
+
+		std::map<std::string, std::string> extToMIME;
+		extToMIME["html"] = "text/html";
+		extToMIME["css"] = "text/css";
+		extToMIME["js"] = "text/javascript";
+
+		// extract file extension
+		std::size_t const extPos = requestLine.target.find_last_of(".");
+		std::string ext = requestLine.target.substr(extPos+1);
+
+		// default MIME type
+		std::string MIMEType = "application/octet-stream";
+
+		std::map<std::string, std::string>::iterator const MIMETypeIt = extToMIME.find(ext);
+		if (MIMETypeIt != extToMIME.end())
+		{
+			MIMEType = MIMETypeIt->second;
+		}
+
 		// build message header
 		std::ostringstream ossMessageHeader;
-		ossMessageHeader << "HTTP/1.1 200 OK\r\n"
-			<< "Content-Type: text/html\r\n"
-			<< "Content-Length: " << ossMessageBody.str().size() << "\r\n"
-			<< "\r\n";
+		ossMessageHeader
+			<< "HTTP/1.1" << SP << "200" << SP << "OK" << CRLF // status line
+			<< "Content-Type:" << SP << MIMEType << CRLF
+			<< "Content-Length:" << SP << contentLength << CRLF
+			<< CRLF;
 
 		return ossMessageHeader.str() + ossMessageBody.str();
     }
