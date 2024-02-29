@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/02/23 20:47:52 by almelo           ###   ########.fr       */
+/*   Updated: 2024/02/28 23:39:49 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -138,19 +138,23 @@ namespace http
 
 				buffer[bytesReceived] = '\0';
 				request << buffer;
-
+				
 				// is it the end of request headers?
 				std::size_t reqHeaderEnd = request.str().find("\r\n\r\n");
 				if (reqHeaderEnd != std::string::npos)
 				{
 					break ;
 				}
+				// to do:
+				// place this initial parsing apart from this
+				// reading loop
 			}
 			this->_request = request.str();
 			request.clear();
 
-			// to do: parse the request
-			//_parseRequest();
+			// to do:
+			// create a Request struct/class
+			// parse the request
 			std::istringstream	issRequest(_request);
 
 			// method, target(URI), http-version
@@ -160,6 +164,9 @@ namespace http
 			issRequest >> requestLine.httpVersion;
 			issRequest.clear();
 
+			// to do:
+			// create a Response struct/class
+			// to manage headers and body separately 
 			_serverMessage = _buildResponse(requestLine);
 
 			_sendResponse();
@@ -187,11 +194,9 @@ namespace http
 
 	std::string TcpServer::_buildResponse(struct RequestLine& requestLine)
     {
-		std::ostringstream ossMessageBody;
-
 		std::string const DEFAULT_RESOURCE = "index.html";
-		//std::string const SERVER_ROOT = "/home/algacyr/Desktop/oracle-next-education/oneCrypt";
-		std::string const SERVER_ROOT = "/home/algacyr/Desktop/42/projects/webserv";
+		std::string const ROOT = "/home/algacyr/Desktop/oracle-next-education/oneCrypt";
+		//std::string const ROOT = "/home/algacyr/Desktop/forum-mariana";
 
 		if (requestLine.target == "/") {
 			requestLine.target.append(DEFAULT_RESOURCE);
@@ -199,19 +204,15 @@ namespace http
 
 		// to do:
 		// if there is no index.html, create directory listing for /
-		std::ifstream	ifs((SERVER_ROOT + requestLine.target).c_str());
-
-		// build message body
-		std::string line;
-		while (std::getline(ifs, line))
-		{
-			ossMessageBody << line << '\n';
-		}
-		ifs.close();
+		std::string targetPath = ROOT + requestLine.target;
+		std::ifstream	ifs(targetPath.c_str(), std::ifstream::binary);
 
 		// message constant characters
 		std::string const SP = " ";
 		std::string const CRLF = "\r\n";
+		
+		std::ostringstream ossMessageBody;
+		ossMessageBody << ifs.rdbuf();
 
 		std::string const messageBody = ossMessageBody.str();
 		std::size_t const contentLength = messageBody.size();
@@ -220,6 +221,9 @@ namespace http
 		extToMIME["html"] = "text/html";
 		extToMIME["css"] = "text/css";
 		extToMIME["js"] = "text/javascript";
+
+		extToMIME["svg"] = "image/svg+xml";
+		extToMIME["jpg"] = "image/jpeg";
 
 		// extract file extension
 		std::size_t const extPos = requestLine.target.find_last_of(".");
@@ -242,11 +246,15 @@ namespace http
 			<< "Content-Length:" << SP << contentLength << CRLF
 			<< CRLF;
 
-		return ossMessageHeader.str() + ossMessageBody.str();
+		return ossMessageHeader.str() + messageBody;
     }
 
 	void	TcpServer::_sendResponse(void)
 	{
+		// to do:
+		// create a loop to guarantee that all data
+		// is delivered to client
+		
 		std::string::size_type	bytesSent;
 
 		bytesSent = write(
