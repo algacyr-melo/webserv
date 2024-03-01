@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/01 01:55:37 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/01 16:45:13 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,7 +32,8 @@
 
 namespace
 {
-	int const BUFFER_SIZE = 4096; // 4KB
+	//int const BUFFER_SIZE = 4096; // 4KB
+	int const BUFFER_SIZE = 256; // 1KB
 
 	void log(std::string const& message)
 	{
@@ -150,7 +151,6 @@ namespace http
 			}
 
 			// did the client close the connection?
-			// it means there's no more data to read
 			if (bytesReceived == 0)
 			{
 				break ;
@@ -159,6 +159,7 @@ namespace http
 			buffer[bytesReceived] = '\0';
 			requestData << buffer;
 
+			// temporary solution while still using blocking sockets
 			if (requestData.str().find("\r\n\r\n") != std::string::npos)
 			{
 				break ;
@@ -197,29 +198,44 @@ namespace http
 
 	std::string TcpServer::_buildResponse(struct Request& request)
     {
-		std::string const DEFAULT_RESOURCE = "index.html";
-		std::string const ROOT = "/home/algacyr/Desktop/oracle-next-education/oneCrypt";
-		//std::string const ROOT = "/home/algacyr/Desktop/forum-mariana";
+		std::string const INDEX = "index.html";
+
+		//std::string const ROOT = "/home/algacyr/Desktop/oracle-next-education/oneCrypt";
+		std::string const ROOT = "/home/algacyr/Desktop/forum-mariana";
 
 		if (request.targetURI== "/") {
-			request.targetURI.append(DEFAULT_RESOURCE);
+			request.targetURI.append(INDEX);
 		}
+
+		struct Response* response = new Response();
+
+		// to do:
+		// create a function/struct with status code-message table
+		response->statusCode = "200";
+		response->statusMessage = "OK";
 
 		// to do:
 		// if there is no index.html, create directory listing for /
 		std::string targetPath = ROOT + request.targetURI;
 		std::ifstream	ifs(targetPath.c_str(), std::ifstream::binary);
+		if (!ifs.is_open())
+		{
+			response->statusCode = "404";
+			response->statusMessage = "File not found";
+		}
 
 		// message constant characters
 		std::string const SP = " ";
 		std::string const CRLF = "\r\n";
 		
-		std::ostringstream ossMessageBody;
-		ossMessageBody << ifs.rdbuf();
+		std::ostringstream bodyBuf;
+		bodyBuf << ifs.rdbuf();
+		ifs.close();
 
-		std::string const messageBody = ossMessageBody.str();
-		std::size_t const contentLength = messageBody.size();
+		response->body = bodyBuf.str();
 
+		// to do:
+		// move this MIME setup to another place
 		std::map<std::string, std::string> extToMIME;
 		extToMIME["html"] = "text/html";
 		extToMIME["css"] = "text/css";
@@ -244,12 +260,14 @@ namespace http
 		// build message header
 		std::ostringstream ossMessageHeader;
 		ossMessageHeader
-			<< "HTTP/1.1" << SP << "200" << SP << "OK" << CRLF // status line
+			<< "HTTP/1.1" << SP
+			<< response->statusCode << SP
+			<< response->statusMessage << CRLF // status line end
 			<< "Content-Type:" << SP << MIMEType << CRLF
-			<< "Content-Length:" << SP << contentLength << CRLF
+			<< "Content-Length:" << SP << response->body.size() << CRLF
 			<< CRLF;
 
-		return ossMessageHeader.str() + messageBody;
+		return ossMessageHeader.str() + response->body;
     }
 
 	void	TcpServer::_sendResponse(void)

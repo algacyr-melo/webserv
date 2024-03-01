@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/02/29 16:20:26 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/01 00:56:05 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/01 16:04:19 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -36,8 +36,8 @@ namespace http
 
 	struct Response : Message
 	{
-		unsigned short	statusCode;
-		std::string		statusMessage;
+		std::string	statusCode;
+		std::string	statusMessage;
 	};
 }
 #endif
