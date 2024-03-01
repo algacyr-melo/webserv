@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/02/29 16:20:26 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/01 16:04:19 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/01 17:33:40 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,8 +24,9 @@ namespace http
 
 		public:
 			std::string httpVersion;
+
+			std::string headers;
 			std::string body;
-		// to do: maybe a map for the headers?
 	};
 
 	struct Request : Message

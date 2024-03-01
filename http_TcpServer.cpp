@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/01 16:45:13 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/01 17:55:36 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -56,8 +56,7 @@ namespace http
 			_socket(),
 			_newSocket(),
 			_socketAddr(),
-			_socketAddrLen(sizeof(_socketAddr)),
-			_serverMessage()
+			_socketAddrLen(sizeof(_socketAddr))
 	{
 		_socketAddr.sin_family = AF_INET;
 		_socketAddr.sin_port = htons(_port);
@@ -111,22 +110,19 @@ namespace http
 
 		while (true)
 		{
-			
 			_acceptConnection(_newSocket);
 
 			std::stringstream	requestData;
 			_readRequestData(requestData);
 
 			struct Request* request = _parseRequest(requestData);
+			struct Response* response = _buildResponse(*request);
 
-			// to do:
-			// create a Response struct/class
-			// to manage headers and body separately 
-			_serverMessage = _buildResponse(*request);
-			delete request;
+			_sendResponse(*response);
 
-			_sendResponse();
 			close(_newSocket);
+			delete request;
+			delete response;
 		}
 	}
 
@@ -144,18 +140,12 @@ namespace http
 			bytesReceived = read(_newSocket, buffer, BUFFER_SIZE - 1);
 
 			// is something wrong with the reading process?
-			if (bytesReceived == -1)
+			// did the client close the connection? e.g ctrl+shift+R
+			if (bytesReceived <= 0)
 			{
 				close(this->_newSocket);
-				exitWithError("Failed to read data from client");
-			}
-
-			// did the client close the connection?
-			if (bytesReceived == 0)
-			{
 				break ;
 			}
-
 			buffer[bytesReceived] = '\0';
 			requestData << buffer;
 
@@ -196,7 +186,7 @@ namespace http
 		}
 	}
 
-	std::string TcpServer::_buildResponse(struct Request& request)
+	struct Response*	TcpServer::_buildResponse(struct Request& request)
     {
 		std::string const INDEX = "index.html";
 
@@ -235,7 +225,7 @@ namespace http
 		response->body = bodyBuf.str();
 
 		// to do:
-		// move this MIME setup to another place
+		// move this MIMEType logic to some specialized place
 		std::map<std::string, std::string> extToMIME;
 		extToMIME["html"] = "text/html";
 		extToMIME["css"] = "text/css";
@@ -256,6 +246,7 @@ namespace http
 		{
 			MIMEType = MIMETypeIt->second;
 		}
+		// end MIMEType logic
 
 		// build message header
 		std::ostringstream ossMessageHeader;
@@ -267,10 +258,12 @@ namespace http
 			<< "Content-Length:" << SP << response->body.size() << CRLF
 			<< CRLF;
 
-		return ossMessageHeader.str() + response->body;
+		response->headers = ossMessageHeader.str();
+
+		return response;
     }
 
-	void	TcpServer::_sendResponse(void)
+	void	TcpServer::_sendResponse(struct Response& response)
 	{
 		// to do:
 		// create a loop to guarantee that all data
@@ -278,13 +271,26 @@ namespace http
 		
 		std::string::size_type	bytesSent;
 
+		// send status line + headers first
 		bytesSent = write(
 			_newSocket,
-			_serverMessage.c_str(),
-			_serverMessage.size()
+			response.headers.c_str(),
+			response.headers.size()
 		);
 
-		if (bytesSent < _serverMessage.size())
+		if (bytesSent < response.headers.size())
+		{
+			log("Error sending response to client");
+		}
+
+		// then send body data
+		bytesSent = write(
+			_newSocket,
+			response.body.c_str(),
+			response.body.size()
+		);
+
+		if (bytesSent < response.body.size())
 		{
 			log("Error sending response to client");
 		}

@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:30 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/01 01:54:27 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/01 17:52:54 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -39,17 +39,15 @@ namespace http
 			struct sockaddr_in	_socketAddr;
 			unsigned int		_socketAddrLen;
 
-			std::string			_serverMessage;
-
 			int			_startServer(void);
 			void		_acceptConnection(int&);
+			void		_closeServer(void);
 
 			void	_readRequestData(std::stringstream&);
-			struct Request*	_parseRequest(std::stringstream&);
 
-			std::string	_buildResponse(struct Request&);
-			void		_sendResponse(void);
-			void		_closeServer(void);
+			struct Request*		_parseRequest(std::stringstream&);
+			struct Response*	_buildResponse(struct Request&);
+			void				_sendResponse(struct Response&);
 	};
 } // namespace http
 #endif
