@@ -6,25 +6,29 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/02/28 23:39:49 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/01 01:55:37 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "http_TcpServer.h"
-#include "http_RequestLine.h"
+#include "http_Message.h"
+
 #include <arpa/inet.h>
+#include <sys/socket.h>
+
 #include <cstddef>
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
+
 #include <string>
-#include <sys/socket.h>
+#include <map>
+
 #include <unistd.h>
 #include <stdlib.h>
 
 #include <fcntl.h>
-
-#include <map>
 
 namespace
 {
@@ -92,6 +96,7 @@ namespace http
 			exitWithError("Socket listen failed");
 		}
 
+		// build log message
 		std::ostringstream	oss;
 		oss << "Serving HTTP on "
 			<< inet_ntoa(_socketAddr.sin_addr)
@@ -103,75 +108,73 @@ namespace http
 			<< ") ...";
 		log(oss.str());
 
-		int bytesReceived;
 		while (true)
 		{
+			
 			_acceptConnection(_newSocket);
 
-			// set the socket to non-blocking
-			//fcntl(_newSocket, F_SETFL, O_NONBLOCK);
+			std::stringstream	requestData;
+			_readRequestData(requestData);
 
-			std::ostringstream request;
-
-			char buffer[BUFFER_SIZE] = {0};
-			while (true)
-			{
-				// the read call will block by default
-				// waiting for data to be available for reading
-				bytesReceived = read(_newSocket, buffer, BUFFER_SIZE - 1);
-
-				// is something wrong with the reading process?
-				if (bytesReceived == -1)
-				{
-					close(this->_newSocket);
-					close(this->_socket);
-					exitWithError("Failed to read bytes from client");
-				}
-
-				// did the client close the connection?
-				if (bytesReceived == 0)
-				{
-					close(this->_newSocket);
-					log("Connection closed by the client");
-					break ;
-				}
-
-				buffer[bytesReceived] = '\0';
-				request << buffer;
-				
-				// is it the end of request headers?
-				std::size_t reqHeaderEnd = request.str().find("\r\n\r\n");
-				if (reqHeaderEnd != std::string::npos)
-				{
-					break ;
-				}
-				// to do:
-				// place this initial parsing apart from this
-				// reading loop
-			}
-			this->_request = request.str();
-			request.clear();
-
-			// to do:
-			// create a Request struct/class
-			// parse the request
-			std::istringstream	issRequest(_request);
-
-			// method, target(URI), http-version
-			struct RequestLine requestLine;
-			issRequest >> requestLine.method;
-			issRequest >> requestLine.target;
-			issRequest >> requestLine.httpVersion;
-			issRequest.clear();
+			struct Request* request = _parseRequest(requestData);
 
 			// to do:
 			// create a Response struct/class
 			// to manage headers and body separately 
-			_serverMessage = _buildResponse(requestLine);
+			_serverMessage = _buildResponse(*request);
+			delete request;
 
 			_sendResponse();
 			close(_newSocket);
 		}
+	}
+
+	void	TcpServer::_readRequestData(std::stringstream& requestData)
+	{
+		// set the socket to non-blocking
+		//fcntl(_newSocket, F_SETFL, O_NONBLOCK);
+
+		char	buffer[BUFFER_SIZE] = {0};
+		int		bytesReceived;
+		while (true)
+		{
+			// the read call will block by default
+			// waiting for data to be available for reading
+			bytesReceived = read(_newSocket, buffer, BUFFER_SIZE - 1);
+
+			// is something wrong with the reading process?
+			if (bytesReceived == -1)
+			{
+				close(this->_newSocket);
+				exitWithError("Failed to read data from client");
+			}
+
+			// did the client close the connection?
+			// it means there's no more data to read
+			if (bytesReceived == 0)
+			{
+				break ;
+			}
+
+			buffer[bytesReceived] = '\0';
+			requestData << buffer;
+
+			if (requestData.str().find("\r\n\r\n") != std::string::npos)
+			{
+				break ;
+			}
+		}
+	}
+
+	struct Request*	TcpServer::_parseRequest(std::stringstream& requestData)
+	{
+		// extract start-line(request-line) data
+		struct Request* request = new Request();
+		requestData >> request->method;
+		requestData >> request->targetURI;
+		requestData >> request->httpVersion;
+
+		return request;
 	}
 
 	void	TcpServer::_acceptConnection(int& _newSocket)
@@ -192,19 +195,19 @@ namespace http
 		}
 	}
 
-	std::string TcpServer::_buildResponse(struct RequestLine& requestLine)
+	std::string TcpServer::_buildResponse(struct Request& request)
     {
 		std::string const DEFAULT_RESOURCE = "index.html";
 		std::string const ROOT = "/home/algacyr/Desktop/oracle-next-education/oneCrypt";
 		//std::string const ROOT = "/home/algacyr/Desktop/forum-mariana";
 
-		if (requestLine.target == "/") {
-			requestLine.target.append(DEFAULT_RESOURCE);
+		if (request.targetURI== "/") {
+			request.targetURI.append(DEFAULT_RESOURCE);
 		}
 
 		// to do:
 		// if there is no index.html, create directory listing for /
-		std::string targetPath = ROOT + requestLine.target;
+		std::string targetPath = ROOT + request.targetURI;
 		std::ifstream	ifs(targetPath.c_str(), std::ifstream::binary);
 
 		// message constant characters
@@ -226,8 +229,8 @@ namespace http
 		extToMIME["jpg"] = "image/jpeg";
 
 		// extract file extension
-		std::size_t const extPos = requestLine.target.find_last_of(".");
-		std::string ext = requestLine.target.substr(extPos+1);
+		std::size_t const extPos = request.targetURI.find_last_of(".");
+		std::string ext = request.targetURI.substr(extPos+1);
 
 		// default MIME type
 		std::string MIMEType = "application/octet-stream";
