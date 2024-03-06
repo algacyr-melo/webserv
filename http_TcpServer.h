@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:30 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/01 17:52:54 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/05 17:08:55 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -43,11 +43,14 @@ namespace http
 			void		_acceptConnection(int&);
 			void		_closeServer(void);
 
+			// request handlers
 			void	_readRequestData(std::stringstream&);
 
 			struct Request*		_parseRequest(std::stringstream&);
 			struct Response*	_buildResponse(struct Request&);
 			void				_sendResponse(struct Response&);
+
+			std::string	_getMIMEType(struct Request&);
 	};
 } // namespace http
 #endif

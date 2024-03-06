@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/01 17:55:36 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/05 23:23:07 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,8 +32,12 @@
 
 namespace
 {
+	// message constant characters
+	std::string const SP = " ";
+	std::string const CRLF = "\r\n";
+
 	//int const BUFFER_SIZE = 4096; // 4KB
-	int const BUFFER_SIZE = 256; // 1KB
+	int const BUFFER_SIZE = 256; // test
 
 	void log(std::string const& message)
 	{
@@ -95,7 +99,7 @@ namespace http
 		{
 			exitWithError("Socket listen failed");
 		}
-
+		
 		// build log message
 		std::ostringstream	oss;
 		oss << "Serving HTTP on "
@@ -111,6 +115,8 @@ namespace http
 		while (true)
 		{
 			_acceptConnection(_newSocket);
+
+			// to do: log every request delivered
 
 			std::stringstream	requestData;
 			_readRequestData(requestData);
@@ -188,13 +194,20 @@ namespace http
 
 	struct Response*	TcpServer::_buildResponse(struct Request& request)
     {
+		// to do:
+		// check request method and call the correspondent
+		// handle function (handleGetRequest)
 		std::string const INDEX = "index.html";
 
 		//std::string const ROOT = "/home/algacyr/Desktop/oracle-next-education/oneCrypt";
-		std::string const ROOT = "/home/algacyr/Desktop/forum-mariana";
+		//std::string const ROOT = "/home/algacyr/Desktop/forum-mariana";
+		//std::string const ROOT = "/home/algacyr/Desktop/DIO/dio-bootcamp-gamedev/js-yugioh-assets";
+		std::string const ROOT = "/home/algacyr/Desktop/42/projects/webserv";
 
-		if (request.targetURI== "/") {
-			request.targetURI.append(INDEX);
+		// test solution for query params and default URI
+		if (request.targetURI== "/" ||
+			request.targetURI.find("?") != std::string::npos) {
+				request.targetURI = "/index.html";
 		}
 
 		struct Response* response = new Response();
@@ -214,46 +227,23 @@ namespace http
 			response->statusMessage = "File not found";
 		}
 
-		// message constant characters
-		std::string const SP = " ";
-		std::string const CRLF = "\r\n";
-		
+		// read response data
 		std::ostringstream bodyBuf;
 		bodyBuf << ifs.rdbuf();
 		ifs.close();
 
 		response->body = bodyBuf.str();
 
-		// to do:
-		// move this MIMEType logic to some specialized place
-		std::map<std::string, std::string> extToMIME;
-		extToMIME["html"] = "text/html";
-		extToMIME["css"] = "text/css";
-		extToMIME["js"] = "text/javascript";
-
-		extToMIME["svg"] = "image/svg+xml";
-		extToMIME["jpg"] = "image/jpeg";
-
-		// extract file extension
-		std::size_t const extPos = request.targetURI.find_last_of(".");
-		std::string ext = request.targetURI.substr(extPos+1);
-
-		// default MIME type
-		std::string MIMEType = "application/octet-stream";
-
-		std::map<std::string, std::string>::iterator const MIMETypeIt = extToMIME.find(ext);
-		if (MIMETypeIt != extToMIME.end())
-		{
-			MIMEType = MIMETypeIt->second;
-		}
-		// end MIMEType logic
+		std::string MIMEType = _getMIMEType(request);
 
 		// build message header
 		std::ostringstream ossMessageHeader;
 		ossMessageHeader
 			<< "HTTP/1.1" << SP
 			<< response->statusCode << SP
-			<< response->statusMessage << CRLF // status line end
+			<< response->statusMessage << CRLF; // status line end
+	
+		ossMessageHeader
 			<< "Content-Type:" << SP << MIMEType << CRLF
 			<< "Content-Length:" << SP << response->body.size() << CRLF
 			<< CRLF;
@@ -294,6 +284,36 @@ namespace http
 		{
 			log("Error sending response to client");
 		}
+	}
+
+	std::string	TcpServer::_getMIMEType(struct Request& request)
+	{
+		std::map<std::string, std::string> extToMIME;
+		extToMIME["html"] = "text/html";
+		extToMIME["css"] = "text/css";
+		extToMIME["js"] = "text/javascript";
+
+		extToMIME["svg"] = "image/svg+xml";
+		extToMIME["jpg"] = "image/jpeg";
+		extToMIME["ico"] = "image/vdn.microsoft.icon";
+
+		extToMIME["mp3"] = "audio/mpeg";
+
+		extToMIME["mp4"] = "video/mp4";
+
+		// extract file extension
+		std::size_t const extPos = request.targetURI.find_last_of(".");
+		std::string ext = request.targetURI.substr(extPos+1);
+
+		// default MIME type
+		std::string MIMEType = "application/octet-stream";
+
+		std::map<std::string, std::string>::iterator const MIMETypeIt = extToMIME.find(ext);
+		if (MIMETypeIt != extToMIME.end())
+		{
+			MIMEType = MIMETypeIt->second;
+		}
+		return MIMEType;
 	}
 
 	void	TcpServer::_closeServer(void)
