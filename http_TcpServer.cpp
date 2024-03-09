@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/05 23:23:07 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/08 23:35:34 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -121,8 +121,8 @@ namespace http
 			std::stringstream	requestData;
 			_readRequestData(requestData);
 
-			struct Request* request = _parseRequest(requestData);
-			struct Response* response = _buildResponse(*request);
+			struct Request*		request = _parseRequest(requestData);
+			struct Response*	response = _buildResponse(*request);
 
 			_sendResponse(*response);
 
@@ -171,6 +171,19 @@ namespace http
 		requestData >> request->targetURI;
 		requestData >> request->httpVersion;
 
+		std::string	line;
+		while (std::getline(requestData, line))
+		{
+			std::size_t	del = line.find_first_of(":");
+
+			if (del != std::string::npos)
+			{
+				std::string	name = line.substr(0, del);
+				std::string	value = line.substr(del+2); // skip del and SP
+
+				request->fieldLines[name] = value;
+			}
+		}
 		return request;
 	}
 
@@ -199,10 +212,8 @@ namespace http
 		// handle function (handleGetRequest)
 		std::string const INDEX = "index.html";
 
-		//std::string const ROOT = "/home/algacyr/Desktop/oracle-next-education/oneCrypt";
-		//std::string const ROOT = "/home/algacyr/Desktop/forum-mariana";
-		//std::string const ROOT = "/home/algacyr/Desktop/DIO/dio-bootcamp-gamedev/js-yugioh-assets";
 		std::string const ROOT = "/home/algacyr/Desktop/42/projects/webserv";
+		//std::string const ROOT = "/home/algacyr/Desktop";
 
 		// test solution for query params and default URI
 		if (request.targetURI== "/" ||
@@ -241,9 +252,8 @@ namespace http
 		ossMessageHeader
 			<< "HTTP/1.1" << SP
 			<< response->statusCode << SP
-			<< response->statusMessage << CRLF; // status line end
-	
-		ossMessageHeader
+			<< response->statusMessage << CRLF // status line end
+			
 			<< "Content-Type:" << SP << MIMEType << CRLF
 			<< "Content-Length:" << SP << response->body.size() << CRLF
 			<< CRLF;
@@ -300,6 +310,8 @@ namespace http
 		extToMIME["mp3"] = "audio/mpeg";
 
 		extToMIME["mp4"] = "video/mp4";
+
+		extToMIME["pdf"] = "application/pdf";
 
 		// extract file extension
 		std::size_t const extPos = request.targetURI.find_last_of(".");

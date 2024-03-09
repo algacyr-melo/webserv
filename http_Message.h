@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/02/29 16:20:26 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/01 17:33:40 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/08 22:09:39 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 # define HTTP__MESSAGE_H
 
 # include <string>
+# include <map>
 
 namespace http
 {
@@ -27,6 +28,8 @@ namespace http
 
 			std::string headers;
 			std::string body;
+
+			std::map<std::string, std::string>	fieldLines;
 	};
 
 	struct Request : Message
