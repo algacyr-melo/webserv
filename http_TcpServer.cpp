@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/08 23:35:34 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/12 00:34:07 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@
 #include "http_Message.h"
 
 #include <arpa/inet.h>
+#include <cstring>
 #include <sys/socket.h>
 
 #include <cstddef>
@@ -30,11 +31,18 @@
 
 #include <fcntl.h>
 
+#include <dirent.h>
+
 namespace
 {
 	// message constant characters
 	std::string const SP = " ";
 	std::string const CRLF = "\r\n";
+
+	// temporary constants
+	std::string const INDEX = "index.html";
+	//std::string const ROOT = "/home/algacyr/Desktop/42/projects/webserv";
+	std::string const ROOT = "/home/algacyr/Desktop";
 
 	//int const BUFFER_SIZE = 4096; // 4KB
 	int const BUFFER_SIZE = 256; // test
@@ -116,23 +124,23 @@ namespace http
 		{
 			_acceptConnection(_newSocket);
 
-			// to do: log every request delivered
+			// to do: log every req delivered
 
-			std::stringstream	requestData;
-			_readRequestData(requestData);
+			std::stringstream	reqData;
+			_readRequestData(reqData);
 
-			struct Request*		request = _parseRequest(requestData);
-			struct Response*	response = _buildResponse(*request);
+			struct Request*		req = _parseRequest(reqData);
+			struct Response*	res = _handleRequest(*req);
 
-			_sendResponse(*response);
+			_sendResponse(*res);
 
 			close(_newSocket);
-			delete request;
-			delete response;
+			delete req;
+			delete res;
 		}
 	}
 
-	void	TcpServer::_readRequestData(std::stringstream& requestData)
+	void	TcpServer::_readRequestData(std::stringstream& reqData)
 	{
 		// set the socket to non-blocking
 		//fcntl(_newSocket, F_SETFL, O_NONBLOCK);
@@ -153,26 +161,26 @@ namespace http
 				break ;
 			}
 			buffer[bytesReceived] = '\0';
-			requestData << buffer;
+			reqData << buffer;
 
 			// temporary solution while still using blocking sockets
-			if (requestData.str().find("\r\n\r\n") != std::string::npos)
+			if (reqData.str().find("\r\n\r\n") != std::string::npos)
 			{
 				break ;
 			}
 		}
 	}
 
-	struct Request*	TcpServer::_parseRequest(std::stringstream& requestData)
+	struct Request*	TcpServer::_parseRequest(std::stringstream& reqData)
 	{
-		// extract start-line(request-line) data
-		struct Request* request = new Request();
-		requestData >> request->method;
-		requestData >> request->targetURI;
-		requestData >> request->httpVersion;
+		// extract start-line(req-line) data
+		struct Request* req = new Request();
+		reqData >> req->method;
+		reqData >> req->targetURI;
+		reqData >> req->httpVersion;
 
 		std::string	line;
-		while (std::getline(requestData, line))
+		while (std::getline(reqData, line))
 		{
 			std::size_t	del = line.find_first_of(":");
 
@@ -181,10 +189,10 @@ namespace http
 				std::string	name = line.substr(0, del);
 				std::string	value = line.substr(del+2); // skip del and SP
 
-				request->fieldLines[name] = value;
+				req->fieldLines[name] = value;
 			}
 		}
-		return request;
+		return req;
 	}
 
 	void	TcpServer::_acceptConnection(int& _newSocket)
@@ -205,65 +213,182 @@ namespace http
 		}
 	}
 
-	struct Response*	TcpServer::_buildResponse(struct Request& request)
+	struct Response*	TcpServer::_handleRequest(struct Request& req)
     {
-		// to do:
-		// check request method and call the correspondent
-		// handle function (handleGetRequest)
-		std::string const INDEX = "index.html";
-
-		std::string const ROOT = "/home/algacyr/Desktop/42/projects/webserv";
-		//std::string const ROOT = "/home/algacyr/Desktop";
-
 		// test solution for query params and default URI
-		if (request.targetURI== "/" ||
-			request.targetURI.find("?") != std::string::npos) {
-				request.targetURI = "/index.html";
-		}
+		//if (req.targetURI== "/" ||
+		//	req.targetURI.find("?") != std::string::npos) {
+		//		req.targetURI = "/index.html";
+		//}
+		
+		struct Response* res = new Response();
 
-		struct Response* response = new Response();
+		DIR*			dir;
+		struct dirent*	entry;
 
-		// to do:
-		// create a function/struct with status code-message table
-		response->statusCode = "200";
-		response->statusMessage = "OK";
+		std::string absolutePath = ROOT + req.targetURI;
 
-		// to do:
-		// if there is no index.html, create directory listing for /
-		std::string targetPath = ROOT + request.targetURI;
-		std::ifstream	ifs(targetPath.c_str(), std::ifstream::binary);
+		log(absolutePath);
+
+		// could it be opened as a directory?
+		if ((dir = opendir(absolutePath.c_str())) != NULL)
+		{
+			while ((entry = readdir(dir)) != NULL)
+			{
+				if (entry->d_name == INDEX)
+				{
+					std::string const filePath = absolutePath + "/" + entry->d_name;
+					std::ifstream ifs(filePath.c_str(), std::ifstream::binary);
+					if (!ifs.is_open())
+					{
+						log("Error opening the file");
+					}
+
+					// read target file data
+					std::ostringstream bodyBuf;
+					bodyBuf << ifs.rdbuf();
+					ifs.close();
+
+					// build body message
+					res->body = bodyBuf.str();
+
+					// set header data
+					res->statusCode = "200";
+					res->statusMessage = "OK";
+
+					// to do: pass the ultimate path for getMIMEType
+					// instead of the entire req
+					res->fieldLines["ContentType"] = _getMIMEType(req);
+					res->fieldLines["ContentLength"] = res->body.size();
+
+					// build header message
+					res->header = _buildMessageHeader(*res);
+
+					closedir(dir);
+					return res;
+				}
+			}
+
+				// directory listing here
+				std::ostringstream ossMessageBody;
+
+				ossMessageBody <<
+					"<html>"
+					"<head>"
+					"<title>Directory Listing</title>"
+					"</head>"
+					"<body>"
+					"<h1>Directory listing for "
+					<< req.targetURI + "</h1>"
+					"<ul>";
+
+				if ((dir = opendir(absolutePath.c_str())) != NULL)
+				{
+					while ((entry = readdir(dir)) != NULL)
+					{
+						// skip . and .. dirs
+						if (strcmp(entry->d_name, ".") == 0 ||
+							strcmp(entry->d_name, "..") == 0)
+						{
+							continue ;
+						}
+
+						ossMessageBody << "<li>"
+							<< "<a href=\"/"
+							<< entry->d_name
+							<< "\">"
+							<< entry->d_name
+							<< "</a>"
+							<< "</li>";
+					}
+					closedir(dir);
+				}
+				ossMessageBody << "</ul></body></html>";
+				
+				// build body message
+					res->body = ossMessageBody.str();
+
+				// set header data
+				res->statusCode = "200";
+				res->statusMessage = "OK";
+
+				// to do: pass the ultimate path for getMIMEType
+				// instead of the entire req
+				res->fieldLines["ContentType"] = _getMIMEType(req);
+				res->fieldLines["ContentLength"] = res->body.size();
+
+				// build header message
+				res->header = _buildMessageHeader(*res);
+				return res;
+			}
+			closedir(dir);
+
+		// after trying to open it as a directory
+		// try it as a regular file
+		std::ifstream ifs(absolutePath.c_str(), std::ifstream::binary);
 		if (!ifs.is_open())
 		{
-			response->statusCode = "404";
-			response->statusMessage = "File not found";
+			std::ifstream ifs("404.html"); // default 404 page
+
+			// read target file data
+			std::ostringstream bodyBuf;
+			bodyBuf << ifs.rdbuf();
+			ifs.close();
+
+			// build body message
+			res->body = bodyBuf.str();
+
+			// set header data
+			res->statusCode = "404";
+			res->statusMessage = "File not found";
+			res->fieldLines["ContentType"] = "text/html";
+			res->fieldLines["ContentLength"] = res->body.size();
+
+			// build header message
+			res->header = _buildMessageHeader(*res);
+
+			return res;
 		}
 
-		// read response data
+		// read target file data
 		std::ostringstream bodyBuf;
 		bodyBuf << ifs.rdbuf();
 		ifs.close();
 
-		response->body = bodyBuf.str();
+		// build body message
+		res->body = bodyBuf.str();
 
-		std::string MIMEType = _getMIMEType(request);
+		// set header data
+		res->statusCode = "200";
+		res->statusMessage = "OK";
+		res->fieldLines["ContentType"] = _getMIMEType(req);
+		res->fieldLines["ContentLength"] = res->body.size();
 
-		// build message header
-		std::ostringstream ossMessageHeader;
-		ossMessageHeader
-			<< "HTTP/1.1" << SP
-			<< response->statusCode << SP
-			<< response->statusMessage << CRLF // status line end
-			
-			<< "Content-Type:" << SP << MIMEType << CRLF
-			<< "Content-Length:" << SP << response->body.size() << CRLF
-			<< CRLF;
-
-		response->headers = ossMessageHeader.str();
-
-		return response;
+		// build header message
+		res->header = _buildMessageHeader(*res);
+		
+		return res;
     }
 
-	void	TcpServer::_sendResponse(struct Response& response)
+	std::string	TcpServer::_buildMessageHeader(struct Response& res)
+	{
+		std::ostringstream ossMessageHeader;
+
+		// status-line
+		ossMessageHeader
+			<< "HTTP/1.1" << SP
+			<< res.statusCode << SP
+			<< res.statusMessage << CRLF
+	
+		// header
+			<< "Content-Type:" << SP << res.fieldLines["ContentType"] << CRLF
+			<< "Content-Length:" << SP << res.body.size() << CRLF
+			<< CRLF;
+
+		return ossMessageHeader.str();
+	}
+
+	void	TcpServer::_sendResponse(struct Response& res)
 	{
 		// to do:
 		// create a loop to guarantee that all data
@@ -271,32 +396,30 @@ namespace http
 		
 		std::string::size_type	bytesSent;
 
-		// send status line + headers first
+		// send status line + header first
 		bytesSent = write(
 			_newSocket,
-			response.headers.c_str(),
-			response.headers.size()
+			res.header.c_str(),
+			res.header.size()
 		);
-
-		if (bytesSent < response.headers.size())
+		if (bytesSent < res.header.size())
 		{
-			log("Error sending response to client");
+			log("Error sending res to client");
 		}
 
 		// then send body data
 		bytesSent = write(
 			_newSocket,
-			response.body.c_str(),
-			response.body.size()
+			res.body.c_str(),
+			res.body.size()
 		);
-
-		if (bytesSent < response.body.size())
+		if (bytesSent < res.body.size())
 		{
-			log("Error sending response to client");
+			log("Error sending res to client");
 		}
 	}
 
-	std::string	TcpServer::_getMIMEType(struct Request& request)
+	std::string	TcpServer::_getMIMEType(struct Request& req)
 	{
 		std::map<std::string, std::string> extToMIME;
 		extToMIME["html"] = "text/html";
@@ -314,11 +437,12 @@ namespace http
 		extToMIME["pdf"] = "application/pdf";
 
 		// extract file extension
-		std::size_t const extPos = request.targetURI.find_last_of(".");
-		std::string ext = request.targetURI.substr(extPos+1);
+		std::size_t const extPos = req.targetURI.find_last_of(".");
+		std::string ext = req.targetURI.substr(extPos+1);
 
 		// default MIME type
-		std::string MIMEType = "application/octet-stream";
+		//std::string MIMEType = "application/octet-stream";
+		std::string MIMEType = "text/html";
 
 		std::map<std::string, std::string>::iterator const MIMETypeIt = extToMIME.find(ext);
 		if (MIMETypeIt != extToMIME.end())
