@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:39 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/12 00:34:07 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/13 00:17:44 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,6 +32,7 @@
 #include <fcntl.h>
 
 #include <dirent.h>
+#include <sys/stat.h>
 
 namespace
 {
@@ -215,30 +216,26 @@ namespace http
 
 	struct Response*	TcpServer::_handleRequest(struct Request& req)
     {
-		// test solution for query params and default URI
-		//if (req.targetURI== "/" ||
-		//	req.targetURI.find("?") != std::string::npos) {
-		//		req.targetURI = "/index.html";
-		//}
-		
 		struct Response* res = new Response();
 
 		DIR*			dir;
 		struct dirent*	entry;
 
-		std::string absolutePath = ROOT + req.targetURI;
-
-		log(absolutePath);
+		std::string origin = "/home/algacyr/Desktop";
+		std::string path = origin + req.targetURI;
 
 		// could it be opened as a directory?
-		if ((dir = opendir(absolutePath.c_str())) != NULL)
+		// check if there is an index file
+		if ((dir = opendir(path.c_str())) != NULL)
 		{
 			while ((entry = readdir(dir)) != NULL)
 			{
+				// is it the index.html file?
 				if (entry->d_name == INDEX)
 				{
-					std::string const filePath = absolutePath + "/" + entry->d_name;
-					std::ifstream ifs(filePath.c_str(), std::ifstream::binary);
+					std::string const entryPath = path+"/"+entry->d_name;
+
+					std::ifstream ifs(entryPath.c_str(), std::ifstream::binary);
 					if (!ifs.is_open())
 					{
 						log("Error opening the file");
@@ -258,7 +255,7 @@ namespace http
 
 					// to do: pass the ultimate path for getMIMEType
 					// instead of the entire req
-					res->fieldLines["ContentType"] = _getMIMEType(req);
+					res->fieldLines["ContentType"] = _getMIMEType(INDEX);
 					res->fieldLines["ContentLength"] = res->body.size();
 
 					// build header message
@@ -266,66 +263,79 @@ namespace http
 
 					closedir(dir);
 					return res;
-				}
-			}
-
-				// directory listing here
-				std::ostringstream ossMessageBody;
-
-				ossMessageBody <<
-					"<html>"
-					"<head>"
-					"<title>Directory Listing</title>"
-					"</head>"
-					"<body>"
-					"<h1>Directory listing for "
-					<< req.targetURI + "</h1>"
-					"<ul>";
-
-				if ((dir = opendir(absolutePath.c_str())) != NULL)
-				{
-					while ((entry = readdir(dir)) != NULL)
-					{
-						// skip . and .. dirs
-						if (strcmp(entry->d_name, ".") == 0 ||
-							strcmp(entry->d_name, "..") == 0)
-						{
-							continue ;
-						}
-
-						ossMessageBody << "<li>"
-							<< "<a href=\"/"
-							<< entry->d_name
-							<< "\">"
-							<< entry->d_name
-							<< "</a>"
-							<< "</li>";
-					}
-					closedir(dir);
-				}
-				ossMessageBody << "</ul></body></html>";
-				
-				// build body message
-					res->body = ossMessageBody.str();
-
-				// set header data
-				res->statusCode = "200";
-				res->statusMessage = "OK";
-
-				// to do: pass the ultimate path for getMIMEType
-				// instead of the entire req
-				res->fieldLines["ContentType"] = _getMIMEType(req);
-				res->fieldLines["ContentLength"] = res->body.size();
-
-				// build header message
-				res->header = _buildMessageHeader(*res);
-				return res;
-			}
+				} // END found index.html file
+			} // END check if there is an index file
 			closedir(dir);
+
+			// index.html not found?
+			// go for directory listing
+			std::ostringstream ossMessageBody;
+
+			ossMessageBody <<
+				"<html>"
+				"<head>"
+				"<title>Directory Listing</title>"
+				"</head>"
+				"<body>"
+				"<h1>Directory listing for "
+				<< req.targetURI + "</h1>"
+				"<ul>";
+
+			if ((dir = opendir(path.c_str())) != NULL)
+			{
+				while ((entry = readdir(dir)) != NULL)
+				{
+					// skip . and .. dirs
+					if (strcmp(entry->d_name, ".") == 0 ||
+						strcmp(entry->d_name, "..") == 0)
+					{
+						continue ;
+					}
+
+					struct stat fileInfo;
+					if (stat(path.c_str(), &fileInfo) == -1)
+					{
+						log("Error accessing file information");
+					}
+
+
+					ossMessageBody << "<li>"
+						<< "<a href=\""
+						<< req.targetURI;
+					ossMessageBody
+						<< entry->d_name;
+						if (S_ISDIR(fileInfo.st_mode))
+							ossMessageBody << "/"
+						<< "\">"
+						<< entry->d_name
+						<< "</a>"
+						<< "</li>";
+				}
+				closedir(dir);
+			}
+			ossMessageBody << "</ul></body></html>";
+			// END building directory list
+		
+			// set body data
+			res->body = ossMessageBody.str();
+
+			// set header data
+			res->statusCode = "200";
+			res->statusMessage = "OK";
+
+			res->fieldLines["ContentType"] = "text/html";
+			res->fieldLines["ContentLength"] = res->body.size();
+
+			// build header message
+			res->header = _buildMessageHeader(*res);
+			return res;
+		}
+		closedir(dir);
 
 		// after trying to open it as a directory
 		// try it as a regular file
-		std::ifstream ifs(absolutePath.c_str(), std::ifstream::binary);
+		std::ifstream ifs(path.c_str(), std::ifstream::binary);
+
 		if (!ifs.is_open())
 		{
 			std::ifstream ifs("404.html"); // default 404 page
@@ -335,7 +345,7 @@ namespace http
 			bodyBuf << ifs.rdbuf();
 			ifs.close();
 
-			// build body message
+			// set body data 
 			res->body = bodyBuf.str();
 
 			// set header data
@@ -355,13 +365,13 @@ namespace http
 		bodyBuf << ifs.rdbuf();
 		ifs.close();
 
-		// build body message
+		// set body data 
 		res->body = bodyBuf.str();
 
 		// set header data
 		res->statusCode = "200";
 		res->statusMessage = "OK";
-		res->fieldLines["ContentType"] = _getMIMEType(req);
+		res->fieldLines["ContentType"] = _getMIMEType(req.targetURI);
 		res->fieldLines["ContentLength"] = res->body.size();
 
 		// build header message
@@ -419,7 +429,7 @@ namespace http
 		}
 	}
 
-	std::string	TcpServer::_getMIMEType(struct Request& req)
+	std::string	TcpServer::_getMIMEType(std::string fileName)
 	{
 		std::map<std::string, std::string> extToMIME;
 		extToMIME["html"] = "text/html";
@@ -437,8 +447,8 @@ namespace http
 		extToMIME["pdf"] = "application/pdf";
 
 		// extract file extension
-		std::size_t const extPos = req.targetURI.find_last_of(".");
-		std::string ext = req.targetURI.substr(extPos+1);
+		std::size_t const extPos = fileName.find_last_of(".");
+		std::string ext = fileName.substr(extPos+1);
 
 		// default MIME type
 		//std::string MIMEType = "application/octet-stream";

@@ -6,7 +6,7 @@
 /*   By: almelo <almelo@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/01/24 15:31:30 by almelo            #+#    #+#             */
-/*   Updated: 2024/03/11 20:26:44 by almelo           ###   ########.fr       */
+/*   Updated: 2024/03/12 23:20:16 by almelo           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -39,6 +39,8 @@ namespace http
 			struct sockaddr_in	_socketAddr;
 			unsigned int		_socketAddrLen;
 
+			std::string _pathName; // req parser stuff
+
 			int			_startServer(void);
 			void		_acceptConnection(int&);
 			void		_closeServer(void);
@@ -51,9 +53,9 @@ namespace http
 
 			std::string	_buildMessageHeader(struct Response&);
 
-			void				_sendResponse(struct Response&);
+			void	_sendResponse(struct Response&);
 
-			std::string	_getMIMEType(struct Request&);
+			std::string	_getMIMEType(std::string);
 	};
 } // namespace http
 #endif
