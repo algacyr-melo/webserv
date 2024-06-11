@@ -1,28 +1,28 @@
-NAME		= webserv 
+NAME = webserv 
 
-SRC			= main.cpp \
-			  http_TcpServer.cpp
+SRC = main.cpp \
+	  http_TcpServer.cpp
 
-OBJ			= $(SRC:.cpp=.o)
+OBJ = $(SRC:.cpp=.o)
 
-CXX			= c++
+CXX = c++
 
-CXXFLAGS	= -Wall -Wextra -Werror -std=c++98
+CXXFLAGS = -Wall -Wextra -Werror -std=c++98
 
-$(NAME)		: $(OBJ) http_TcpServer.h http_Message.h
+$(NAME): $(OBJ) http_TcpServer.h http_Message.h
 	$(CXX) $(OBJ) -o $(NAME)
 
-all			: $(NAME)
+all: $(NAME)
 
-.cpp.o		:
+.cpp.o:
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-clean		:
+clean:
 	$(RM) $(OBJ)
 
-fclean		: clean
+fclean: clean
 	$(RM) $(NAME)
 
-re			: fclean all
+re: fclean all
 
-.PHONY		: all clean fclean re
+.PHONY: all clean fclean re
